@@ -83,7 +83,7 @@ pub fn main() !void {
     const stdin = std.io.getStdIn();
     const reader = stdin.reader();
 
-    var seeds = std.ArrayList(u64).init(alloc);
+    var seeds = std.ArrayList(Range).init(alloc);
     var seed_to_soil = Map.init(alloc);
     var soil_to_fert = Map.init(alloc);
     var fert_to_water = Map.init(alloc);
@@ -94,10 +94,13 @@ pub fn main() !void {
 
     var buf: [1024 * 1024]u8 = undefined;
 
+    var total: u64 = 0;
     var line = (try nextLine(reader, &buf)) orelse return error.InvalidInput;
     line = line[6..];
-    while (readNum(&line)) |seed| {
-        try seeds.append(seed);
+    while (readNum(&line)) |begin| {
+        const len = readNum(&line) orelse return error.InvalidInput;
+        try seeds.append(Range{ .begin = begin, .end = begin + len });
+        total += len;
     }
 
     _ = (try nextLine(reader, &buf)) orelse return error.InvalidInput;
@@ -110,17 +113,33 @@ pub fn main() !void {
     try readMap(reader, &buf, &temp_to_hum);
     try readMap(reader, &buf, &hum_to_loc);
 
-    for (seeds.items) |*val| {
-        val.* = resolve(val.*, &seed_to_soil);
-        val.* = resolve(val.*, &soil_to_fert);
-        val.* = resolve(val.*, &fert_to_water);
-        val.* = resolve(val.*, &water_to_light);
-        val.* = resolve(val.*, &light_to_temp);
-        val.* = resolve(val.*, &temp_to_hum);
-        val.* = resolve(val.*, &hum_to_loc);
+    std.debug.print("  0.0% ", .{});
+    var cnt: u64 = 0;
+    var perc: u64 = 0;
+    var min: u64 = 0xFFFFFFFFFFFFFFFF;
+    for (seeds.items) |r| {
+        for (r.begin..r.end) |seed| {
+            var val = seed;
+            val = resolve(val, &seed_to_soil);
+            val = resolve(val, &soil_to_fert);
+            val = resolve(val, &fert_to_water);
+            val = resolve(val, &water_to_light);
+            val = resolve(val, &light_to_temp);
+            val = resolve(val, &temp_to_hum);
+            val = resolve(val, &hum_to_loc);
+            if (val < min) {
+                min = val;
+            }
+
+            cnt += 1;
+            const new_perc = cnt * 1000 / total;
+            if (new_perc != perc) {
+                perc = new_perc;
+                std.debug.print("\x08\x08\x08\x08\x08\x08\x08{d: >3}.{d}% ", .{ perc / 10, perc % 10 });
+            }
+        }
     }
+    std.debug.print("\x08\x08\x08\x08\x08\x08\x08      \x08\x08\x08\x08\x08\x08\x08", .{});
 
-    const closest = seeds.items[std.mem.indexOfMin(u64, seeds.items)];
-
-    try std.io.getStdOut().writer().print("{}\n", .{closest});
+    try std.io.getStdOut().writer().print("{}\n", .{min});
 }
